@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Linear regression</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%238b2d1f'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-family='Georgia,serif' font-size='22' fill='%23f2ede3'%3El%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;1,9..144,300;1,9..144,400&family=Inter+Tight:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+</head>
+<body>
+<aside id="side">
+  <header class="side-head">
+    <div class="brand"><span class="mark">p</span><a id="org" href="#" target="_blank" rel="noopener"></a></div>
+    <div class="eyebrow" id="eyebrow">Proof of concept</div>
+    <div class="course-title" id="course-title"></div>
+    <div class="learner" id="learner"></div>
+    <div class="overall">
+      <div class="overall-bar"><div id="overall-fill"></div></div>
+      <div class="overall-text" id="overall-text"></div>
+    </div>
+    <button id="continue" class="continue"></button>
+  </header>
+  <nav id="tree" class="tree" aria-label="Course content"></nav>
+  <footer class="side-foot">
+    <a href="#/doc/docs/kernel.md">Kernel</a> ·
+    <a href="#/doc/data/README.md">Fixture</a> ·
+    <a id="repo-link" href="#" target="_blank" rel="noopener">GitHub</a>
+    <div class="updated" id="updated"></div>
+    <div class="by" id="tagline"></div>
+  </footer>
+</aside>
+<main id="main">
+  <div class="topbar">
+    <div class="crumbs" id="crumbs"></div>
+    <div class="nav">
+      <span id="kernel" class="kernel">Kernel idle</span>
+      <button id="prev" title="Previous rung">← Prev</button>
+      <button id="next" title="Next rung">Next →</button>
+    </div>
+  </div>
+  <div id="now" class="now"></div>
+  <article id="content" class="content"></article>
+</main>
+<script src="app.js"></script>
+</body>
+</html>

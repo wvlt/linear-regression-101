@@ -1,0 +1,48 @@
+{
+  "learner": "you",
+  "curriculum_version": "poc-0.1",
+  "updated": "2026-11-06",
+  "hours_total": 1,
+  "course": {
+    "title": "Linear regression",
+    "org": "AI Tech Institute",
+    "org_url": "https://www.aitechinstitute.com.au/",
+    "tagline": "Baseline before the line.",
+    "repo_url": "https://github.com/wvlt/linear-regression-101"
+  },
+  "tiers": { "A": "The model is not the algorithm" },
+  "stages": [
+    {
+      "id": "s00",
+      "name": "The line",
+      "tier": "A",
+      "hours": 1,
+      "brief": "stages/00-the-line/README.md",
+      "parts": [
+        {
+          "id": "A",
+          "title": "The first number",
+          "rungs": [
+            { "n": "0", "id": "s00-r0", "title": "Look at the rows", "minutes": 8, "anchor": "rung-0--look-at-the-rows" },
+            { "n": "1", "id": "s00-r1", "title": "Predict the mean", "minutes": 8, "anchor": "rung-1--predict-the-mean" }
+          ]
+        },
+        {
+          "id": "B",
+          "title": "The line",
+          "rungs": [
+            { "n": "2", "id": "s00-r2", "title": "A line beats the mean", "minutes": 10, "anchor": "rung-2--a-line-beats-the-mean" },
+            { "n": "3", "id": "s00-r3", "title": "Rows it has never seen", "minutes": 10, "anchor": "rung-3--rows-it-has-never-seen" }
+          ]
+        },
+        {
+          "id": "C",
+          "title": "Where it is wrong",
+          "rungs": [
+            { "n": "4", "id": "s00-r4", "title": "The residual", "minutes": 10, "anchor": "rung-4--the-residual" }
+          ]
+        }
+      ]
+    }
+  ]
+}
