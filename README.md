@@ -32,7 +32,7 @@ The first **Run** downloads the kernel. Later cells in the same tab start immedi
 | Brief | [`stages/00-the-line/README.md`](stages/00-the-line/README.md) |
 | Kernel | [`docs/kernel.md`](docs/kernel.md) |
 
-Routes match the course player: `#/s00` is the brief, `#/s00/r2` is rung 2.
+The player shows one rung at a time. `#/s00/r2` is rung 2. On a phone, **Rungs** opens the list; **Prev** and **Next** sit at the bottom. A note beside each line says what that line does. The note is not part of the program that runs.
 
 ## Naming
 

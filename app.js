@@ -42,6 +42,14 @@
     el.textContent = text;
   }
 
+  function setNav(open) {
+    document.body.classList.toggle("nav-open", open);
+    const backdrop = $("#backdrop");
+    const menu = $("#menu");
+    if (backdrop) backdrop.hidden = !open;
+    if (menu) menu.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+
   function renderSide() {
     const c0 = D.course;
     document.title = `${c0.title} · ${c0.org}`;
@@ -64,7 +72,7 @@
 
     const btn = $("#continue");
     btn.innerHTML = `<span class="arrow">→</span>${done ? "Continue" : "Start"} · Stage ${stageNum(cur.s.id)}, Rung ${cur.r.n}<small>${cur.r.title} · ~${cur.r.minutes} min</small>`;
-    btn.onclick = () => { location.hash = `#/${cur.s.id}/r${cur.r.n}`; };
+    btn.onclick = () => { setNav(false); location.hash = `#/${cur.s.id}/r${cur.r.n}`; };
 
     const tree = $("#tree");
     tree.innerHTML = "";
@@ -105,7 +113,7 @@
         re.dataset.stage = s.id;
         re.dataset.rung = r.n;
         re.innerHTML = `<span class="mark">${isDone ? "✓" : "○"}</span><span class="rung-title">Rung ${r.n} — ${r.title}</span><span class="mins">${r.minutes} min</span>`;
-        re.onclick = (e) => { e.stopPropagation(); location.hash = `#/${s.id}/r${r.n}`; };
+        re.onclick = (e) => { e.stopPropagation(); setNav(false); location.hash = `#/${s.id}/r${r.n}`; };
         rungs.appendChild(re);
       }
     }
@@ -139,74 +147,134 @@
     return s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
   }
 
-  function attachChecks(container, stage) {
-    const rungs = stage.parts.flatMap((p) => p.rungs);
-    container.querySelectorAll("h3").forEach((h) => {
-      const m = h.textContent.match(/^Rung (\w+) — /);
-      h.id = slug(h.textContent);
-      if (!m) return;
-      const r = rungs.find((x) => x.n === m[1]);
-      if (!r) return;
-      if (rungDone(r)) h.classList.add("is-done");
-      if (view && view.rung === r.n && !rungDone(r)) h.classList.add("is-current");
-      let el = h.nextElementSibling;
-      while (el && !/^H[1-3]$/.test(el.tagName)) {
-        if (el.tagName === "P" && el.textContent.trim() === "Check") {
-          const card = document.createElement("div");
-          card.className = "check-card";
-          const state = checks()[r.n] || {};
-          card.innerHTML = `
-            <div class="row">
-              <button type="button" data-k="run" class="${state.run ? "on" : ""}">${state.run ? "☑" : "☐"} Run</button>
-              <button type="button" data-k="see" class="${state.see ? "on" : ""}">${state.see ? "☑" : "☐"} See</button>
-              <button type="button" data-k="say" class="${state.say ? "on" : ""}">${state.say ? "☑" : "☐"} Say</button>
-            </div>
-            <div class="hint">${r.id} · ticks stay in this browser. They mark the rung; they are not a grade.</div>`;
-          card.querySelectorAll("button").forEach((b) => {
-            b.onclick = () => {
-              const all = checks();
-              const row = all[r.n] || {};
-              row[b.dataset.k] = !row[b.dataset.k];
-              all[r.n] = row;
-              saveChecks(all);
-              renderSide();
-              syncSide();
-              const on = row[b.dataset.k];
-              b.classList.toggle("on", on);
-              b.textContent = `${on ? "☑" : "☐"} ${b.dataset.k[0].toUpperCase()}${b.dataset.k.slice(1)}`;
-              h.classList.toggle("is-done", rungDone(r));
-              h.classList.toggle("is-current", view && view.rung === r.n && !rungDone(r));
-            };
-          });
-          el.after(card);
-          break;
-        }
-        el = el.nextElementSibling;
-      }
+  function sliceBetween(md, startHeading, endHeading) {
+    const start = md.indexOf(startHeading);
+    if (start < 0) return "";
+    const from = start + startHeading.length;
+    const end = endHeading ? md.indexOf(endHeading, from) : -1;
+    return md.slice(from, end < 0 ? undefined : end).trim();
+  }
+
+  function parseBrief(md) {
+    const rungs = [];
+    const re = /^### Rung (\w+) — .+$/gm;
+    const marks = [];
+    let m;
+    while ((m = re.exec(md))) marks.push({ n: m[1], at: m.index, end: m.index + m[0].length });
+    const codaAt = md.indexOf("## What this stage does not do");
+    marks.forEach((item, i) => {
+      const next = i + 1 < marks.length ? marks[i + 1].at : (codaAt < 0 ? md.length : codaAt);
+      rungs.push({ n: item.n, body: md.slice(item.end, next).trim() });
     });
+    return {
+      why: sliceBetween(md, "## Why this stage exists", "## Contract"),
+      concepts: sliceBetween(md, "## Ten minutes of concepts", "## Part A"),
+      coda: sliceBetween(md, "## What this stage does not do", null),
+      rungs,
+    };
+  }
+
+  function splitGloss(raw) {
+    const lines = raw.replace(/\s+$/, "").split("\n");
+    const parsed = lines.map((line) => {
+      const at = line.indexOf(" :: ");
+      if (at < 0) return { src: line, gloss: "" };
+      return { src: line.slice(0, at).trimEnd(), gloss: line.slice(at + 4).trim() };
+    });
+    return { code: parsed.map((l) => l.src).join("\n"), parsed };
+  }
+
+  function attachCheck(container, rung) {
+    const paras = [...container.querySelectorAll("p")];
+    const el = paras.find((p) => p.textContent.trim() === "Check");
+    if (!el) return;
+    const card = document.createElement("div");
+    card.className = "check-card";
+    const state = checks()[rung.n] || {};
+    const tick = (key, label) => `<button type="button" data-k="${key}" class="${state[key] ? "on" : ""}">${state[key] ? "☑" : "☐"} ${label}</button>`;
+    card.innerHTML = `
+      <div class="row">${tick("run", "Run")}${tick("see", "See")}${tick("say", "Say")}</div>
+      <div class="hint">${rung.id} · ticks stay in this browser. They mark the rung; they are not a grade.</div>`;
+    card.querySelectorAll("button").forEach((b) => {
+      b.onclick = () => {
+        const all = checks();
+        const row = all[rung.n] || {};
+        row[b.dataset.k] = !row[b.dataset.k];
+        all[rung.n] = row;
+        saveChecks(all);
+        renderSide();
+        syncSide();
+        const on = row[b.dataset.k];
+        const label = b.dataset.k[0].toUpperCase() + b.dataset.k.slice(1);
+        b.classList.toggle("on", on);
+        b.textContent = `${on ? "☑" : "☐"} ${label}`;
+      };
+    });
+    el.after(card);
   }
 
   function attachCells(container) {
-    container.querySelectorAll("pre code.language-python").forEach((code) => {
+    const codes = [...container.querySelectorAll("pre code.language-python")];
+    const cells = [];
+    codes.forEach((code, i) => {
       const pre = code.parentElement;
+      const { code: source, parsed } = splitGloss(code.textContent);
       const cell = document.createElement("div");
       cell.className = "py-cell";
-      pre.parentNode.insertBefore(cell, pre);
-      cell.appendChild(pre);
+      const heading = pre.previousElementSibling;
+      const title = heading && heading.tagName === "H4" ? heading.textContent.trim() : "Python";
+      if (heading && heading.tagName === "H4") heading.remove();
+      const lines = document.createElement("div");
+      lines.className = "py-lines";
+      parsed.forEach((line) => {
+        const row = document.createElement("div");
+        if (!line.src && !line.gloss) { row.className = "py-line blank"; lines.appendChild(row); return; }
+        row.className = "py-line";
+        const src = document.createElement("span");
+        src.className = "src";
+        src.textContent = line.src || " ";
+        row.appendChild(src);
+        if (line.gloss) {
+          const gloss = document.createElement("span");
+          gloss.className = "gloss";
+          gloss.textContent = line.gloss;
+          row.appendChild(gloss);
+        }
+        lines.appendChild(row);
+      });
       const bar = document.createElement("div");
       bar.className = "cell-bar";
-      bar.innerHTML = `<span class="label">Python · in this browser</span>`;
+      bar.innerHTML = codes.length > 1 ? `<div class="cell-kicker">Cell ${i + 1} of ${codes.length}</div>` : "";
+      const titleEl = document.createElement("div");
+      titleEl.className = "cell-title";
+      titleEl.textContent = title;
+      bar.appendChild(titleEl);
       const run = document.createElement("button");
       run.type = "button";
       run.className = "run";
       run.textContent = "Run";
-      bar.appendChild(run);
+      const foot = document.createElement("div");
+      foot.className = "cell-foot";
+      foot.appendChild(run);
       const out = document.createElement("div");
       out.className = "cell-out";
-      cell.appendChild(bar);
-      cell.appendChild(out);
-      run.onclick = () => execute(code.textContent, run, out);
+      cell.append(bar, lines, foot, out);
+      pre.replaceWith(cell);
+      run.onclick = () => execute(source, run, out);
+      cells.push({ source, run, out });
     });
+    if (cells.length > 1) {
+      const all = document.createElement("button");
+      all.type = "button";
+      all.className = "run-rung";
+      all.textContent = "Run from the top";
+      cells[0].run.closest(".py-cell").before(all);
+      all.onclick = async () => {
+        all.disabled = true;
+        for (const cell of cells) await execute(cell.source, cell.run, cell.out);
+        all.disabled = false;
+      };
+    }
   }
 
   function showOutput(out, text, isErr) {
@@ -234,23 +302,23 @@
     if (pyodide) return pyodide;
     if (starting) return starting;
     starting = (async () => {
-      setKernel("busy", "Loading Python…");
+      setKernel("busy", "Starting…");
       await loadScript(PYODIDE + "pyodide.js");
       const py = await loadPyodide({ indexURL: PYODIDE });
-      setKernel("busy", "Loading pandas and scikit-learn…");
+      setKernel("busy", "Loading…");
       await py.loadPackage(["numpy", "pandas", "scikit-learn", "matplotlib"]);
       const csv = await (await fetch("data/orders.csv")).text();
       py.FS.writeFile("/orders.csv", csv);
       await py.runPythonAsync(PRELUDE);
       pyodide = py;
-      setKernel("ready", "Kernel ready");
+      setKernel("ready", "In this tab");
       return py;
     })();
     try {
       return await starting;
     } catch (e) {
       starting = null;
-      setKernel("", "Kernel failed");
+      setKernel("", "Failed");
       throw e;
     }
   }
@@ -271,7 +339,8 @@
       await py.runPythonAsync(source);
       showOutput(out, chunks.join(""), false);
     } catch (e) {
-      const msg = (chunks.join("") + "\n" + (e.message || String(e))).trim();
+      let msg = (chunks.join("") + "\n" + (e.message || String(e))).trim();
+      if (/NameError/.test(msg)) msg += "\n\nRun the cells above this one first. They share the kernel in this tab.";
       showOutput(out, msg, true);
     } finally {
       button.disabled = false;
@@ -317,11 +386,11 @@ def show(fig=None):
     print("__PNG__" + png + "__ENDPNG__")
 `;
 
-  function renderNow() {
-    const cur = currentRung();
-    const nxt = allRungs()[allRungs().findIndex(({ r }) => r.n === cur.r.n) + 1];
-    $("#now").style.display = "";
-    $("#now").innerHTML = `<b>Now — ${cur.r.title}.</b> Press Run on the cell. The first press downloads Python into this tab; the fit stays here.<div class="next"><b>Next</b> &nbsp;${nxt ? `Rung ${nxt.r.n} — ${nxt.r.title}` : "You have marked every rung."}</div>`;
+  function wirePager(flat, idx) {
+    $("#prev").disabled = idx <= 0;
+    $("#next").disabled = idx < 0 || idx >= flat.length - 1;
+    $("#prev").onclick = () => { if (idx > 0) { const t = flat[idx - 1]; location.hash = `#/${t.s.id}/r${t.r.n}`; } };
+    $("#next").onclick = () => { if (idx >= 0 && idx < flat.length - 1) { const t = flat[idx + 1]; location.hash = `#/${t.s.id}/r${t.r.n}`; } };
   }
 
   async function show() {
@@ -334,36 +403,40 @@ def show(fig=None):
           const href = a.getAttribute("href");
           if (/^https?:/.test(href)) a.target = "_blank";
         });
-        $("#crumbs").innerHTML = `<b>${view.doc}</b>`;
-        $("#now").style.display = "none";
-        $("#prev").disabled = true;
-        $("#next").disabled = true;
+        $("#crumbs").innerHTML = `<b>${view.doc.split("/").pop()}</b>`;
+        wirePager([], -1);
         $("#main").scrollTo(0, 0);
       } else {
         const s = findStage(view.stage);
         if (!s) throw new Error("No stage " + view.stage);
         const md = await fetchMd(s.brief);
-        content.innerHTML = marked.parse(md);
-        attachChecks(content, s);
-        attachCells(content);
-        renderNow();
-        const r = view.rung ? s.parts.flatMap((p) => p.rungs).find((x) => x.n === view.rung) : null;
-        const part = r ? s.parts.find((p) => p.rungs.includes(r)) : null;
-        const pill = r
-          ? `<span class="pill ${rungDone(r) ? "done" : "current"}">${rungDone(r) ? "marked" : "you are here"}</span>`
-          : `<span class="pill current">the brief</span>`;
-        $("#crumbs").innerHTML = `Tier ${s.tier} › <b>Stage ${stageNum(s.id)} · ${s.name}</b>`
-          + (part ? ` › Part ${part.id}` : "")
-          + (r ? ` › <b>Rung ${r.n}</b>` : "")
-          + pill;
+        const brief = parseBrief(md);
         const flat = allRungs();
-        const idx = r ? flat.findIndex((x) => x.r.n === r.n) : -1;
-        $("#prev").disabled = idx <= 0;
-        $("#next").disabled = idx < 0 || idx >= flat.length - 1;
-        $("#prev").onclick = () => { const t = flat[idx - 1]; location.hash = `#/${t.s.id}/r${t.r.n}`; };
-        $("#next").onclick = () => { const t = flat[idx + 1]; location.hash = `#/${t.s.id}/r${t.r.n}`; };
-        if (r) document.getElementById(r.anchor)?.scrollIntoView();
-        else $("#main").scrollTo(0, 0);
+        const idx = flat.findIndex((x) => x.s.id === s.id && x.r.n === view.rung);
+        const item = idx >= 0 ? flat[idx] : flat[0];
+        const rungMd = brief.rungs.find((r) => r.n === item.r.n);
+        if (!rungMd) throw new Error("No rung " + view.rung);
+        const ideas = item.r.n === "0" ? `
+          <details class="ideas">
+            <summary>Why this stage, and the six words it uses</summary>
+            ${marked.parse(brief.why)}
+            ${marked.parse(brief.concepts)}
+          </details>` : "";
+        const coda = item.r.n === "4" ? marked.parse("## What this page does not do\n\n" + brief.coda) : "";
+        content.innerHTML = `
+          <header class="rung-head">
+            <div class="eyebrow">Part ${item.p.id} — ${item.p.title}</div>
+            <h1>${item.r.title}</h1>
+          </header>
+          ${ideas}
+          ${marked.parse(rungMd.body)}
+          ${coda}`;
+        attachCheck(content, item.r);
+        attachCells(content);
+        const pill = `<span class="pill ${rungDone(item.r) ? "done" : "current"}">${rungDone(item.r) ? "marked" : `${idx + 1} of ${flat.length}`}</span>`;
+        $("#crumbs").innerHTML = `<b>Rung ${item.r.n}</b>${pill}`;
+        wirePager(flat, idx);
+        $("#main").scrollTo(0, 0);
       }
     } catch (e) {
       content.innerHTML = `<div class="err">Could not load the brief (${escapeHtml(e.message)}). Serve the repository root — <code>just site</code> — and open <code>http://localhost:8000/#/s00/r0</code>.</div>`;
@@ -386,12 +459,15 @@ def show(fig=None):
     show();
   }
 
+  $("#menu").onclick = () => setNav(!document.body.classList.contains("nav-open"));
+  $("#backdrop").onclick = () => setNav(false);
+
   fetch("data.json")
     .then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })
     .then((d) => {
       D = d;
       renderSide();
-      window.addEventListener("hashchange", route);
+      window.addEventListener("hashchange", () => { setNav(false); route(); });
       route();
     })
     .catch((e) => {
